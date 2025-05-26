@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beni Seviyor musun?</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles not covered by Tailwind or for animations */
+        body {
+            font-family: 'Inter', sans-serif;
+            position: relative; /* Needed for confetti positioning */
+        }
+        .heart {
+            position: fixed;
+            top: -50px;
+            font-size: 30px;
+            animation: fall 5s linear infinite;
+            color: #e91e63; /* Tailwind equivalent: text-pink-600 */
+            pointer-events: none; /* Allow clicks to pass through hearts */
+            z-index: 20; /* Below confetti, above main content */
+        }
+        @keyframes fall {
+            to {
+                transform: translateY(110vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        /* Custom Message Box */
+        #messageBox {
+            display: none;
+        }
+        /* Celebration screen styling */
+        #celebrationScreen {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: #ffe6e6;
+            z-index: 40;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+        #celebrationScreen.active {
+            opacity: 1;
+            display: flex;
+        }
+
+        /* Confetti particle styling */
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background-color: #f00; /* Default color */
+            border-radius: 50%;
+            animation: confetti-fall 3s linear forwards;
+            z-index: 50; /* Above everything else */
+            pointer-events: none;
+        }
+        @keyframes confetti-fall {
+            from {
+                transform: translateY(0) rotateZ(0deg);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(100vh) rotateZ(720deg);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-pink-100 text-center overflow-hidden flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 id="mainTitle" class="mt-12 text-pink-700 text-4xl sm:text-5xl md:text-6xl font-extrabold mb-8"></h1>
+    
+    <div id="buttonContainer" class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-8">
+        <button id="yesButton" class="text-xl px-8 py-4 m-5 border-none rounded-xl transition-all duration-300 relative z-10 bg-green-500 text-white shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300">Evet</button>
+        <button id="noButton" class="text-xl px-8 py-4 m-5 border-none rounded-xl transition-all duration-300 relative z-10 bg-red-500 text-white shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-red-300">Hayır</button>
+    </div>
+
+    <div id="messageBox" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <p id="messageText" class="text-2xl font-semibold text-gray-800 mb-6"></p>
+            <button id="closeMessageBox" class="bg-blue-500 text-white px-6 py-3 rounded-lg text-lg font-medium hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300">Tamam</button>
+        </div>
+    </div>
+
+    <div id="celebrationScreen">
+        <p id="celebrationText" class="text-pink-700 text-5xl sm:text-7xl md:text-8xl font-extrabold animate-pulse"></p>
+    </div>
+
+    <script>
+        // --- APP CONFIGURATION (Kişiselleştirilebilir Metinler) ---
+        const appConfig = {
+            mainTitle: "Beni Seviyor musun?",
+            yesButtonInitialText: "Evet",
+            noButtonInitialText: "Hayır",
+            reconciliationMessageFullScreen: "BEN DE SENİ SEVİYORUM", // When 'Yes' button takes over
+            finalCelebrationMessage: "BEN DE SENİ SEVİYORUM ❤🎉" // Final message on celebration screen
+        };
+        // --- END APP CONFIGURATION ---
+
+        // Get references to DOM elements
+        const yesButton = document.getElementById('yesButton');
+        const noButton = document.getElementById('noButton');
+        const mainTitle = document.getElementById('mainTitle');
+        const buttonContainer = document.getElementById('buttonContainer');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const closeMessageBox = document.getElementById('closeMessageBox');
+        const celebrationScreen = document.getElementById('celebrationScreen');
+        const celebrationText = document.getElementById('celebrationText');
+
+        // Set initial texts from config
+        mainTitle.innerText = appConfig.mainTitle;
+        yesButton.innerText = appConfig.yesButtonInitialText;
+        noButton.innerText = appConfig.noButtonInitialText;
+        celebrationText.innerText = appConfig.finalCelebrationMessage; // Set final celebration message
+
+        // Initial font size for the 'Yes' button
+        let currentSize = 20;
+        let heartInterval; // To store the interval ID for heart rain
+        let confettiInterval; // To store the interval ID for confetti
+
+        /**
+         * Displays a custom message box with the given message.
+         * @param {string} message - The message to display.
+         */
+        function showMessageBox(message) {
+            messageText.innerText = message;
+            messageBox.style.display = 'flex';
+        }
+
+        /**
+         * Hides the custom message box.
+         */
+        function hideMessageBox() {
+            messageBox.style.display = 'none';
+        }
+
+        /**
+         * Generates random confetti particles.
+         */
+        function generateConfetti() {
+            const confettiColors = ['#f00', '#0f0', '#00f', '#ff0', '#0ff', '#f0f', '#ffa500']; // Red, Green, Blue, Yellow, Cyan, Magenta, Orange
+            const numConfetti = 50; // Number of confetti particles to generate at once
+
+            for (let i = 0; i < numConfetti; i++) {
+                const confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.top = -10 + 'px'; // Start slightly above view
+                confetti.style.backgroundColor = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+                confetti.style.animationDuration = (Math.random() * 2 + 3) + 's'; // Random duration
+                confetti.style.transform = `translateX(${Math.random() * 200 - 100}px) rotateZ(${Math.random() * 360}deg)`; // Initial slight horizontal movement and rotation
+                document.body.appendChild(confetti);
+
+                // Remove confetti after its animation ends
+                setTimeout(() => {
+                    confetti.remove();
+                }, parseFloat(confetti.style.animationDuration) * 1000);
+            }
+        }
+
+        /**
+         * Handles the success state when reconciliation is achieved.
+         */
+        function handleReconciliationSuccess() {
+            // Hide main content
+            mainTitle.style.display = 'none';
+            buttonContainer.style.display = 'none';
+            yesButton.style.display = 'none';
+
+            // Show celebration screen
+            celebrationScreen.classList.add('active');
+
+            // Make hearts fall more intensely for celebration
+            clearInterval(heartInterval); // Clear existing interval
+            heartInterval = setInterval(() => {
+                const heart = document.createElement('div');
+                heart.classList.add('heart');
+                heart.style.left = Math.random() * 100 + 'vw';
+                heart.style.animationDuration = (Math.random() * 2 + 2) + 's'; // Faster hearts
+                heart.style.fontSize = (Math.random() * 20 + 30) + 'px'; // Larger hearts
+                heart.innerText = '❤';
+                document.body.appendChild(heart);
+
+                setTimeout(() => {
+                    heart.remove();
+                }, parseFloat(heart.style.animationDuration) * 1000);
+            }, 100); // More frequent hearts
+
+            // Start confetti rain
+            confettiInterval = setInterval(generateConfetti, 500); // Generate confetti every 0.5 seconds
+        }
+
+        // Event listener for the 'No' button
+        noButton.addEventListener('click', () => {
+            currentSize += 30;
+            yesButton.style.fontSize = currentSize + 'px';
+
+            if (currentSize > window.innerWidth * 0.8) {
+                yesButton.classList.add('fixed', 'inset-0', 'w-full', 'h-full', 'flex', 'items-center', 'justify-center', 'text-white', 'text-center', 'bg-pink-500', 'z-20', 'rounded-none');
+                yesButton.style.fontSize = '10vw';
+                yesButton.innerText = appConfig.reconciliationMessageFullScreen; // Use updated message
+                noButton.style.display = 'none';
+                mainTitle.style.display = 'none';
+                buttonContainer.style.display = 'none';
+
+                yesButton.addEventListener('click', () => {
+                    handleReconciliationSuccess();
+                }, { once: true });
+            }
+        });
+
+        // Make 'No' button run away on mouse over (desktop only)
+        noButton.addEventListener('mouseover', () => {
+            if (noButton.style.display !== 'none') {
+                const maxX = window.innerWidth - noButton.offsetWidth;
+                const maxY = window.innerHeight - noButton.offsetHeight;
+
+                const newX = Math.random() * maxX;
+                const newY = Math.random() * maxY;
+
+                noButton.style.position = 'absolute';
+                noButton.style.left = newX + 'px';
+                noButton.style.top = newY + 'px';
+            }
+        });
+
+        // Event listener for the 'Yes' button (initial click)
+        yesButton.addEventListener('click', () => {
+            handleReconciliationSuccess();
+        });
+
+        // Event listener to close the custom message box
+        closeMessageBox.addEventListener('click', hideMessageBox);
+
+        // Initial heart rain animation
+        heartInterval = setInterval(() => {
+            const heart = document.createElement('div');
+            heart.classList.add('heart');
+            heart.style.left = Math.random() * 100 + 'vw';
+            heart.innerText = '❤';
+            document.body.appendChild(heart);
+
+            setTimeout(() => {
+                heart.remove();
+            }, 5000);
+        }, 300);
+    </script>
+
+</body>
+</html>
