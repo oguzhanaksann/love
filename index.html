@@ -219,14 +219,15 @@
 
         // Make 'No' button run away on mouse over (desktop only)
         noButton.addEventListener('mouseover', () => {
-            if (noButton.style.display !== 'none') {
+            // Only apply this behavior on larger screens (e.g., width > 768px for md breakpoint in Tailwind)
+            if (window.innerWidth > 768 && noButton.style.display !== 'none') {
                 const maxX = window.innerWidth - noButton.offsetWidth;
                 const maxY = window.innerHeight - noButton.offsetHeight;
 
                 const newX = Math.random() * maxX;
                 const newY = Math.random() * maxY;
 
-                noButton.style.position = 'absolute';
+                noButton.style.position = 'absolute'; // Change to absolute for free movement
                 noButton.style.left = newX + 'px';
                 noButton.style.top = newY + 'px';
             }
